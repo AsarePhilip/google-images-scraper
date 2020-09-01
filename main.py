@@ -1,47 +1,45 @@
-import requests, time, os
-from selenium import webdriver
-from colorama import Fore, init
-init(convert=True)
+import requests
+import threading
+import os
 
-num = 0
-linklist = []
-validimagetype = ['JPEG','JFIF','JPG','TIFF','GIF','BMP','PNG','PPM','PGM','PBM','PNM','WEBP']
+class Scraper(object):
+    def __init__(self):
+        self.imagelist = []
+        self.validfiles = ['JPEG','JFIF','JPG','TIFF','GIF','BMP','PNG','PPM','PGM','PBM','PNM','WEBP']
 
-print(Fore.CYAN, end='')
-searchterm = input(f"[!] Search term: ")
+    def getImages(self, response):
+        imagerange = response.split('\\u003dqdr:y","Past year",')[1]
+        for line in imagerange.splitlines():
+            if line.startswith(',["http') and line.endswith(']'):
+                self.imagelist.append('http' + line.split('http')[1].split('"')[0])
+    
+    def writeImages(self):
+        print(f'[+] Found {str(len(self.imagelist))} images')
+        name = 0
+        for image in self.imagelist:
+            try:
+                r = requests.get(image)
+                contenttype = r.headers['content-type']
+                for ftype in self.validfiles:
+                    if ftype.lower() in contenttype:
+                        name = name + 1
+                        f = open(f'{self.term}/{str(name)}.{ftype.lower()}', 'wb')
+                        for chunk in r:
+                            f.write(chunk)
+                        print(f'[!] Wrote {str(name)}.{ftype.lower()}')
+            except:
+                pass
+    
+    def run(self, term):
+        self.term = term
+        req = requests.get(f'https://www.google.com/search?q={self.term.replace(" ", "+")}&tbm=isch',
+        headers = {
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.83 Safari/537.36'
+        })
+        self.getImages(req.text)
+        self.writeImages()
 
-os.makedirs(searchterm)
-
-options = webdriver.ChromeOptions()
-options.add_argument('--headless')
-options.add_argument('--disable-gpu')
-options.add_argument('log-level=3')
-options.add_experimental_option('excludeSwitches', ['enable-logging'])
-driver = webdriver.Chrome("chromedriver.exe", options=options)
-driver.get(f'https://www.google.com/search?q={searchterm.replace(" ", "+")}&tbm=isch')
-
-time.sleep(5)
-
-imagebox = driver.page_source.split('\\u003dqdr:y","Past year",')[1]
-
-for line in imagebox.splitlines():
-    if 'http' and '",' in line and line.startswith(',["') and line.endswith(']'):
-        try:
-            linklist.append('http' + line.split('http')[1].split('"')[0])
-        except: pass
-
-for link in linklist:
-    try:
-        r = requests.get(link)
-        ftype = r.headers['content-type'].split('/')[1]
-        if ';' in ftype:
-            ftype = ftype.split(';')[0]
-        if ftype.upper() in validimagetype:
-            num = num + 1
-            f = open(f"{searchterm}\\{str(num)}.{ftype}", 'wb')
-            for chunk in r:
-                f.write(chunk)
-    except Exception as e: pass
-
-driver.close()
-print(f"{Fore.CYAN}[!] Done!")
+if __name__ == "__main__":
+    term = input('[!] Search Term: ')
+    os.makedirs(term)
+    Scraper().run(term)
